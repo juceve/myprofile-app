@@ -24,6 +24,9 @@ class RoleManagementTest extends TestCase
         $this->assertTrue($admin->can('roles.create'));
         $this->assertTrue($admin->can('roles.update'));
         $this->assertTrue($admin->can('roles.delete'));
+        $this->assertTrue($admin->can('dashboard.view'));
+        $this->assertTrue($admin->can('cartera.view'));
+        $this->assertTrue($admin->can('cartera.import'));
     }
 
     public function test_authorized_user_can_create_role_with_permissions(): void

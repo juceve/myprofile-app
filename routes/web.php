@@ -1,21 +1,30 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Livewire\Actions\Logout;
+use App\Http\Controllers\CarteraController;
 use App\Http\Controllers\RoleController;
+use App\Livewire\Actions\Logout;
+use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
 
 Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'permission:dashboard.view'])
     ->name('dashboard');
 
 Route::view('profile', 'profile')
     ->middleware(['auth'])
     ->name('profile');
 
-Route::view('blank', 'blank')->name('blank');
-Route::view('forms', 'forms')->name('forms');
+Route::view('blank', 'blank')->middleware(['auth', 'permission:users.view'])->name('blank');
+Route::view('forms', 'forms')->middleware(['auth', 'permission:forms.view'])->name('forms');
+
+Route::get('cartera', [CarteraController::class, 'index'])
+    ->middleware(['auth', 'permission:cartera.view'])
+    ->name('cartera.index');
+
+Route::post('cartera/importar', [CarteraController::class, 'importar'])
+    ->middleware(['auth', 'permission:cartera.import'])
+    ->name('cartera.importar');
 
 Route::middleware(['auth', 'permission:roles.view'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
@@ -33,4 +42,4 @@ Route::post('logout', function (Logout $logout) {
     return redirect('/');
 })->middleware('auth')->name('logout');
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

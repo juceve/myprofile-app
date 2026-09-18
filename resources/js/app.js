@@ -16,16 +16,20 @@ document.querySelector('[data-sidebar-open]')?.addEventListener('click', () => {
 document.querySelector('[data-sidebar-close]')?.addEventListener('click', closeSidebar);
 backdrop?.addEventListener('click', closeSidebar);
 
-document.querySelectorAll('[data-sidebar-group-toggle]').forEach((toggle) => {
-    toggle.addEventListener('click', () => {
-        const group = toggle.closest('[data-sidebar-group]');
-        const submenu = group?.querySelector('[data-sidebar-submenu]');
-        const chevron = group?.querySelector('[data-sidebar-chevron]');
-        const open = submenu?.classList.toggle('hidden') === false;
+document.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-sidebar-group-toggle]');
 
-        toggle.setAttribute('aria-expanded', String(open));
-        chevron?.classList.toggle('rotate-180', open);
-    });
+    if (!toggle) {
+        return;
+    }
+
+    const group = toggle.closest('[data-sidebar-group]');
+    const submenu = group?.querySelector('[data-sidebar-submenu]');
+    const chevron = group?.querySelector('[data-sidebar-chevron]');
+    const open = submenu?.classList.toggle('hidden') === false;
+
+    toggle.setAttribute('aria-expanded', String(open));
+    chevron?.classList.toggle('rotate-180', open);
 });
 
 document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
@@ -81,3 +85,91 @@ document.querySelectorAll('[data-confirm-form]').forEach((form) => {
         }
     });
 });
+
+const closeModal = (modal) => {
+    modal?.classList.add('hidden');
+    modal?.setAttribute('aria-hidden', 'true');
+
+    if (!document.querySelector('[data-modal]:not(.hidden)')) {
+        document.body.classList.remove('overflow-y-hidden');
+    }
+};
+
+document.querySelectorAll('[data-modal-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const modal = document.querySelector(`#${button.dataset.modalOpen}`);
+
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('overflow-y-hidden');
+        modal.querySelector('[data-modal-autofocus]')?.focus();
+    });
+});
+
+document.querySelectorAll('[data-modal]').forEach((modal) => {
+    modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+        button.addEventListener('click', () => closeModal(modal));
+    });
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        document.querySelectorAll('[data-modal]:not(.hidden)').forEach(closeModal);
+    }
+});
+
+const loadingOverlay = document.querySelector('[data-loading-overlay]');
+const loadingMessage = loadingOverlay?.querySelector('[data-loading-message]');
+
+const showLoading = (message = loadingOverlay?.dataset.defaultMessage || 'Procesando solicitud...') => {
+    if (!loadingOverlay) {
+        return;
+    }
+
+    loadingMessage.textContent = message;
+    loadingOverlay.classList.remove('hidden');
+    loadingOverlay.classList.add('flex');
+    loadingOverlay.setAttribute('aria-busy', 'true');
+    loadingOverlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-y-hidden');
+};
+
+const hideLoading = () => {
+    if (!loadingOverlay) {
+        return;
+    }
+
+    loadingOverlay.classList.add('hidden');
+    loadingOverlay.classList.remove('flex');
+    loadingOverlay.setAttribute('aria-busy', 'false');
+    loadingOverlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('overflow-y-hidden');
+};
+
+window.appLoading = { show: showLoading, hide: hideLoading };
+
+document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-loading-form]');
+
+    if (!form || (form.dataset.confirmForm !== undefined && form.dataset.confirmed !== 'true')) {
+        return;
+    }
+
+    showLoading(form.dataset.loadingMessage);
+});
+
+document.addEventListener('click', (event) => {
+    const element = event.target.closest('[data-loading-start]');
+
+    if (element) {
+        showLoading(element.dataset.loadingMessage);
+    }
+});
+
+window.addEventListener('app:loading:start', (event) => showLoading(event.detail?.message));
+window.addEventListener('app:loading:stop', hideLoading);
+window.addEventListener('pageshow', hideLoading);

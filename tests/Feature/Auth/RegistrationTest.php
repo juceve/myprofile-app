@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 use Tests\TestCase;
@@ -21,6 +23,8 @@ class RegistrationTest extends TestCase
 
     public function test_new_users_can_register(): void
     {
+        $this->seed(RolePermissionSeeder::class);
+
         $component = Volt::test('pages.auth.register')
             ->set('name', 'Test User')
             ->set('nickname', 'test-user')
@@ -33,10 +37,16 @@ class RegistrationTest extends TestCase
         $component->assertRedirect(route('dashboard', absolute: false));
 
         $this->assertAuthenticated();
+        $user = User::where('email', 'test@example.com')->firstOrFail();
+
+        $this->assertTrue($user->hasRole('Guest'));
+        $this->assertTrue($user->can('dashboard.view'));
     }
 
     public function test_users_can_register_with_a_dot_in_their_username(): void
     {
+        $this->seed(RolePermissionSeeder::class);
+
         Volt::test('pages.auth.register')
             ->set('name', 'Dot User')
             ->set('nickname', 'dot.user')

@@ -128,6 +128,7 @@
             </main>
         </div>
     </div>
+    <x-loading-overlay />
     <div id="toast-container" class="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] flex-col gap-3 sm:w-auto">
         @if(session('success')) <x-alert type="success">{{ session('success') }}</x-alert> @endif
         @if(session('error')) <x-alert type="danger">{{ session('error') }}</x-alert> @endif
