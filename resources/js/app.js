@@ -116,6 +116,66 @@ document.querySelectorAll('[data-modal]').forEach((modal) => {
     });
 });
 
+const positionFloatingMenu = (details) => {
+    const trigger = details.querySelector('[data-floating-menu-trigger]');
+    const panel = details.querySelector('[data-floating-menu-panel]');
+
+    if (!trigger || !panel) {
+        return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const panelWidth = panel.offsetWidth || 288;
+    const panelHeight = panel.offsetHeight || 320;
+    const left = Math.min(Math.max(8, triggerRect.right - panelWidth), window.innerWidth - panelWidth - 8);
+    const top = triggerRect.bottom + 8 + panelHeight <= window.innerHeight
+        ? triggerRect.bottom + 8
+        : Math.max(8, triggerRect.top - panelHeight - 8);
+
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+};
+
+document.querySelectorAll('[data-floating-menu]').forEach((details) => {
+    const trigger = details.querySelector('[data-floating-menu-trigger]');
+    const panel = details.querySelector('[data-floating-menu-panel]');
+
+    details.addEventListener('toggle', () => {
+        const open = details.open;
+        panel?.classList.toggle('hidden', !open);
+
+        if (open) {
+            document.querySelectorAll('[data-floating-menu][open]').forEach((otherDetails) => {
+                if (otherDetails !== details) {
+                    otherDetails.open = false;
+                    otherDetails.querySelector('[data-floating-menu-panel]')?.classList.add('hidden');
+                }
+            });
+            positionFloatingMenu(details);
+        }
+    });
+
+    trigger?.addEventListener('click', () => requestAnimationFrame(() => positionFloatingMenu(details)));
+});
+
+document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-floating-menu]')) {
+        return;
+    }
+
+    document.querySelectorAll('[data-floating-menu][open]').forEach((details) => {
+        details.open = false;
+        details.querySelector('[data-floating-menu-panel]')?.classList.add('hidden');
+    });
+});
+
+const repositionFloatingMenus = () => {
+    document.querySelectorAll('[data-floating-menu][open]').forEach(positionFloatingMenu);
+};
+
+window.addEventListener('resize', repositionFloatingMenus);
+window.addEventListener('scroll', repositionFloatingMenus, true);
+
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         document.querySelectorAll('[data-modal]:not(.hidden)').forEach(closeModal);
@@ -155,11 +215,78 @@ window.appLoading = { show: showLoading, hide: hideLoading };
 document.addEventListener('submit', (event) => {
     const form = event.target.closest('[data-loading-form]');
 
-    if (!form || (form.dataset.confirmForm !== undefined && form.dataset.confirmed !== 'true')) {
+    if (event.defaultPrevented || !form || form.dataset.progressForm !== undefined || (form.dataset.confirmForm !== undefined && form.dataset.confirmed !== 'true')) {
         return;
     }
 
     showLoading(form.dataset.loadingMessage);
+});
+
+document.querySelectorAll('[data-progress-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        if (form.dataset.submitting === 'true') {
+            return;
+        }
+
+        const progress = form.querySelector('[data-import-progress]');
+        const progressBar = form.querySelector('[data-import-progress-bar]');
+        const progressValue = form.querySelector('[data-import-progress-value]');
+        const progressMessage = form.querySelector('[data-import-progress-message]');
+        const submitButton = form.querySelector('[data-import-submit]');
+        const archivo = form.querySelector('input[type="file"]');
+
+        if (!progress || !progressBar || !progressValue || !progressMessage || !submitButton || !archivo?.files?.length) {
+            form.submit();
+
+            return;
+        }
+
+        form.dataset.submitting = 'true';
+        progress.classList.remove('hidden');
+        submitButton.disabled = true;
+        submitButton.classList.add('cursor-not-allowed', 'opacity-60');
+        progressMessage.textContent = 'Cargando archivo...';
+
+        const actualizarProgreso = (porcentaje, mensaje = null) => {
+            progressBar.style.width = `${porcentaje}%`;
+            progressBar.setAttribute('aria-valuenow', String(porcentaje));
+            progressValue.textContent = `${porcentaje}%`;
+
+            if (mensaje) {
+                progressMessage.textContent = mensaje;
+            }
+        };
+        const solicitud = new XMLHttpRequest();
+
+        solicitud.upload.addEventListener('progress', (progressEvent) => {
+            if (progressEvent.lengthComputable) {
+                actualizarProgreso(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+            }
+        });
+        solicitud.upload.addEventListener('load', () => actualizarProgreso(100, 'Archivo cargado. Procesando cartera...'));
+        solicitud.addEventListener('load', () => {
+            if (solicitud.status >= 200 && solicitud.status < 400) {
+                window.location.assign(solicitud.responseURL || form.action);
+
+                return;
+            }
+
+            form.dataset.submitting = 'false';
+            submitButton.disabled = false;
+            submitButton.classList.remove('cursor-not-allowed', 'opacity-60');
+            progressMessage.textContent = 'No fue posible cargar el archivo. Revise los datos e intente nuevamente.';
+        });
+        solicitud.addEventListener('error', () => {
+            form.dataset.submitting = 'false';
+            submitButton.disabled = false;
+            submitButton.classList.remove('cursor-not-allowed', 'opacity-60');
+            progressMessage.textContent = 'Se perdió la conexión durante la carga.';
+        });
+        solicitud.open(form.method || 'POST', form.action);
+        solicitud.send(new FormData(form));
+    });
 });
 
 document.addEventListener('click', (event) => {

@@ -10,15 +10,21 @@ class ImportacionCartera extends Model
 {
     /** @var list<string> */
     protected $fillable = [
-        'usuario_id', 'nombre_archivo', 'hash_archivo', 'archivo_resguardado', 'hoja', 'estado',
+        'usuario_id', 'empresa_mandante_id', 'nombre_archivo', 'hash_archivo', 'archivo_resguardado', 'hoja', 'estado',
         'filas_leidas', 'filas_omitidas', 'clientes_creados', 'clientes_actualizados',
-        'deudas_creadas', 'deudas_actualizadas', 'deudas_sin_cambios', 'saldo_reportado', 'procesado_en',
+        'deudas_creadas', 'deudas_actualizadas', 'deudas_sin_cambios', 'deudas_ausentes', 'deudas_reingresadas', 'saldo_reportado', 'procesado_en',
     ];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return ['procesado_en' => 'datetime', 'saldo_reportado' => 'decimal:2'];
+    }
+
+    /** Empresa mandante propietaria del corte recibido. */
+    public function empresaMandante(): BelongsTo
+    {
+        return $this->belongsTo(EmpresaMandante::class);
     }
 
     /** Usuario que ejecutó la importación, cuando existe contexto autenticado. */
@@ -37,5 +43,11 @@ class ImportacionCartera extends Model
     public function deudas(): HasMany
     {
         return $this->hasMany(Deuda::class);
+    }
+
+    /** Estados de presencia de obligaciones comparados en este corte. */
+    public function presenciasDeuda(): HasMany
+    {
+        return $this->hasMany(PresenciaDeudaCorte::class);
     }
 }

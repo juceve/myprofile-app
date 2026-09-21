@@ -34,6 +34,12 @@ return [
                     ['name' => 'Permisos y roles', 'route' => 'roles.index', 'can' => 'roles.view'],
                 ],
             ],
+            [
+                'name' => 'Empresas mandantes',
+                'route' => 'empresas-mandantes.index',
+                'icon' => 'building',
+                'can' => 'empresas.view',
+            ],
         ],
     ],
 ];

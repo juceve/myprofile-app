@@ -19,6 +19,7 @@ class CarteraController extends Controller
      */
     public function index(Request $request): View
     {
+        $empresaMandante = $request->attributes->get('empresaMandanteActiva');
         $filtros = $request->validate([
             'buscar' => ['nullable', 'string', 'max:100'],
             'ciudad' => ['nullable', 'string', 'max:255'],
@@ -29,6 +30,8 @@ class CarteraController extends Controller
 
         $deudas = Deuda::query()
             ->with('cliente')
+            ->when($empresaMandante, fn ($query) => $query->whereHas('cliente', fn ($query) => $query->where('empresa_mandante_id', $empresaMandante->id)))
+            ->when(! $empresaMandante, fn ($query) => $query->whereRaw('1 = 0'))
             ->when($filtros['buscar'] ?? null, function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('numero_documento', "%{$buscar}%")
@@ -53,23 +56,33 @@ class CarteraController extends Controller
         return view('cartera.index', [
             'deudas' => $deudas->orderBy('fecha_vencimiento')->orderBy('id')->paginate(25)->withQueryString(),
             'resumen' => $resumen,
-            'ciudades' => Cliente::query()->whereHas('deudas')->whereNotNull('ciudad')->distinct()->orderBy('ciudad')->pluck('ciudad'),
-            'vendedores' => Deuda::query()->whereNotNull('vendedor_nombre')->distinct()->orderBy('vendedor_nombre')->pluck('vendedor_nombre'),
-            'supervisores' => Deuda::query()->whereNotNull('supervisor_nombre')->distinct()->orderBy('supervisor_nombre')->pluck('supervisor_nombre'),
-            'estados' => Deuda::query()->whereNotNull('estado_origen')->distinct()->orderBy('estado_origen')->pluck('estado_origen'),
-            'importaciones' => ImportacionCartera::query()->orderByDesc('procesado_en')->orderByDesc('id')->limit(5)->get(),
+            'ciudades' => Cliente::query()->when($empresaMandante, fn ($query) => $query->where('empresa_mandante_id', $empresaMandante->id))->whereHas('deudas')->whereNotNull('ciudad')->distinct()->orderBy('ciudad')->pluck('ciudad'),
+            'vendedores' => Deuda::query()->whereNotNull('vendedor_nombre')->whereHas('cliente', fn ($query) => $query->where('empresa_mandante_id', $empresaMandante?->id))->distinct()->orderBy('vendedor_nombre')->pluck('vendedor_nombre'),
+            'supervisores' => Deuda::query()->whereNotNull('supervisor_nombre')->whereHas('cliente', fn ($query) => $query->where('empresa_mandante_id', $empresaMandante?->id))->distinct()->orderBy('supervisor_nombre')->pluck('supervisor_nombre'),
+            'estados' => Deuda::query()->whereNotNull('estado_origen')->whereHas('cliente', fn ($query) => $query->where('empresa_mandante_id', $empresaMandante?->id))->distinct()->orderBy('estado_origen')->pluck('estado_origen'),
+            'importaciones' => ImportacionCartera::query()->when($empresaMandante, fn ($query) => $query->where('empresa_mandante_id', $empresaMandante->id))->when(! $empresaMandante, fn ($query) => $query->whereRaw('1 = 0'))->orderByDesc('procesado_en')->orderByDesc('id')->limit(5)->get(),
+            'empresaMandante' => $empresaMandante,
         ]);
     }
 
     public function importar(Request $request): RedirectResponse
     {
+        $empresaMandante = $request->attributes->get('empresaMandanteActiva');
+
+        if ($empresaMandante === null) {
+            return back()->with('error', 'Seleccione una empresa mandante activa antes de importar una cartera.');
+        }
+
         $validated = $request->validate([
             'archivo' => ['required', 'file', 'mimes:xlsx,xls', 'max:20480'],
         ]);
 
         try {
             $ruta = $validated['archivo']->storeAs('importaciones', $validated['archivo']->getClientOriginalName(), 'local');
-            $resultado = Artisan::call('cartera:importar', ['archivo' => Storage::disk('local')->path($ruta)]);
+            $resultado = Artisan::call('cartera:importar', [
+                'archivo' => Storage::disk('local')->path($ruta),
+                '--empresa' => $empresaMandante->codigo,
+            ]);
             $mensaje = trim(Artisan::output());
 
             if ($resultado !== 0) {

@@ -3,7 +3,7 @@
         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
                 <h2 class="text-2xl font-bold tracking-tight dark:text-white">Cartera de cobranzas</h2>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Saldos reportados por el último corte.</p>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Saldos reportados por el último corte de <strong class="text-emerald-700 dark:text-emerald-300">{{ $empresaMandante?->razon_social ?: 'ninguna empresa seleccionada' }}</strong>.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <x-badge variant="info">{{ number_format($resumen['deudas']) }} obligaciones</x-badge>
@@ -57,7 +57,7 @@
             <div id="cartera-importar" data-modal role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="cartera-importar-title" class="fixed inset-0 z-50 hidden overflow-y-auto px-4 py-6 sm:px-0">
                 <div data-modal-close class="fixed inset-0 bg-slate-950/75"></div>
                 <div class="relative mx-auto mb-6 overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-900 sm:w-full sm:max-w-xl">
-                <form method="POST" action="{{ route('cartera.importar') }}" enctype="multipart/form-data" data-loading-form data-loading-message="Importando cartera..." class="p-6">
+                <form method="POST" action="{{ route('cartera.importar') }}" enctype="multipart/form-data" data-loading-form data-progress-form class="p-6">
                     @csrf
                     <div class="flex items-start justify-between gap-4">
                         <div>
@@ -67,13 +67,26 @@
                         <button type="button" data-modal-close class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" aria-label="Cerrar ventana">&times;</button>
                     </div>
                     <div class="mt-6 space-y-2">
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                            <span class="block text-xs font-semibold uppercase tracking-wide">Empresa activa</span>
+                            <strong>{{ $empresaMandante?->codigo }} · {{ $empresaMandante?->razon_social }}</strong>
+                        </div>
                         <label for="archivo" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Archivo Excel</label>
                         <input id="archivo" name="archivo" type="file" accept=".xlsx,.xls" required data-modal-autofocus class="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:file:bg-slate-700 dark:file:text-slate-100" />
                         <p class="text-xs text-slate-500 dark:text-slate-400">Se aceptan archivos XLSX o XLS de hasta 20 MB.</p>
                     </div>
+                    <div data-import-progress class="mt-5 hidden rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60" aria-live="polite">
+                        <div class="flex items-center justify-between gap-3 text-xs font-semibold">
+                            <span data-import-progress-message class="text-slate-600 dark:text-slate-300">Preparando archivo...</span>
+                            <span data-import-progress-value class="text-emerald-700 dark:text-emerald-300">0%</span>
+                        </div>
+                        <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                            <div data-import-progress-bar class="h-full w-0 rounded-full bg-emerald-600 transition-[width] duration-200" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+                        </div>
+                    </div>
                     <div class="mt-6 flex justify-end gap-2">
                         <x-secondary-button type="button" data-modal-close>Cancelar</x-secondary-button>
-                        <x-primary-button>Importar archivo</x-primary-button>
+                        <x-primary-button data-import-submit>Importar archivo</x-primary-button>
                     </div>
                 </form>
                 </div>
@@ -96,10 +109,10 @@
                 @else
                     <div class="mt-5 max-h-[60vh] overflow-auto">
                         <table class="w-full min-w-[760px] text-left text-sm">
-                            <thead class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"><tr><th class="py-3 pr-4">Archivo</th><th class="py-3 pr-4">Estado</th><th class="py-3 pr-4">Filas procesadas</th><th class="py-3 pr-4">Nuevas</th><th class="py-3 pr-4">Actualizadas</th><th class="py-3 pr-4">Procesado</th></tr></thead>
+                            <thead class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"><tr><th class="py-3 pr-4">Archivo</th><th class="py-3 pr-4">Estado</th><th class="py-3 pr-4">Filas procesadas</th><th class="py-3 pr-4">Nuevas</th><th class="py-3 pr-4">Actualizadas</th><th class="py-3 pr-4">Ausentes</th><th class="py-3 pr-4">Reingresadas</th><th class="py-3 pr-4">Procesado</th></tr></thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                 @foreach($importaciones as $importacion)
-                                    <tr><td class="py-3 pr-4 font-medium dark:text-white">{{ $importacion->nombre_archivo }}</td><td class="py-3 pr-4"><x-badge variant="{{ $importacion->estado === 'completada' ? 'success' : 'warning' }}">{{ $importacion->estado ?: 'pendiente' }}</x-badge></td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->filas_leidas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_creadas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_actualizadas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ $importacion->procesado_en?->format('d/m/Y H:i') ?: 'Pendiente' }}</td></tr>
+                                    <tr><td class="py-3 pr-4 font-medium dark:text-white">{{ $importacion->nombre_archivo }}</td><td class="py-3 pr-4"><x-badge variant="{{ $importacion->estado === 'completada' ? 'success' : 'warning' }}">{{ $importacion->estado ?: 'pendiente' }}</x-badge></td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->filas_leidas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_creadas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_actualizadas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_ausentes) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ number_format($importacion->deudas_reingresadas) }}</td><td class="py-3 pr-4 text-slate-600 dark:text-slate-300">{{ $importacion->procesado_en?->format('d/m/Y H:i') ?: 'Pendiente' }}</td></tr>
                                 @endforeach
                             </tbody>
                         </table>

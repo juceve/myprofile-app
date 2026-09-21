@@ -106,6 +106,18 @@
                     <input name="q" value="{{ request('q') }}" class="w-full rounded-xl border border-transparent bg-slate-100 px-4 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-800" placeholder="Buscar trámites, expedientes, usuarios...">
                 </form>
                 <div class="flex items-center gap-2">
+                    @can('empresas.view')
+                        <form method="POST" action="{{ route('empresa-mandante.seleccionar') }}" class="flex min-w-0 items-center gap-2">
+                            @csrf
+                            <label for="empresa-mandante-activa" class="sr-only">Empresa mandante activa</label>
+                            <select id="empresa-mandante-activa" name="empresa_mandante_id" onchange="this.form.submit()" class="max-w-[10rem] truncate rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-2 text-xs font-bold text-emerald-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 sm:max-w-[15rem] sm:px-3 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                                <option value="">Seleccione empresa</option>
+                                @foreach($empresasMandantesActivas ?? [] as $empresaMandante)
+                                    <option value="{{ $empresaMandante->id }}" @selected(($empresaMandanteActiva?->id ?? null) === $empresaMandante->id)>{{ $empresaMandante->codigo }} · {{ $empresaMandante->razon_social }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                    @endcan
                     <a href="{{ route('blank') }}" class="hidden items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 sm:inline-flex">＋ Nuevo Trámite</a>
                     <button data-theme-toggle class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700" title="Cambiar tema">☼ <span class="hidden md:inline">Modo Claro</span></button>
                     <button class="relative rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" title="Notificaciones">♧<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span></button>
@@ -129,7 +141,7 @@
         </div>
     </div>
     <x-loading-overlay />
-    <div id="toast-container" class="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] flex-col gap-3 sm:w-auto">
+    <div id="toast-container" class="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] flex-col gap-3 sm:bottom-6 sm:right-6 sm:w-auto">
         @if(session('success')) <x-alert type="success">{{ session('success') }}</x-alert> @endif
         @if(session('error')) <x-alert type="danger">{{ session('error') }}</x-alert> @endif
     </div>

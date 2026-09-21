@@ -1,161 +1,147 @@
 # Plan de continuidad del proyecto
 
-## 1. Propósito del documento
+## 1. Propósito
 
-Este documento organiza el trabajo completo previsto para el sistema de cobranzas y marca qué procesos ya fueron construidos, cuáles están parcialmente definidos y cuáles todavía deben desarrollarse.
+Este documento organiza el trabajo del sistema de cobranzas y registra qué procesos están realizados, cuáles son parciales y cuáles están pendientes.
 
-Su objetivo es servir como punto de continuidad entre etapas. Cada nueva funcionalidad debe actualizar este documento y conservar las reglas de negocio aquí descritas.
+La aplicación pertenece a una empresa prestadora de servicios de cobranza. La empresa mandante entrega la cartera y recibe al final de la jornada los registros generados por nuestros cobradores.
 
-El documento no es un manual de usuario. Describe procesos, responsabilidades, dependencias y estado técnico del proyecto.
+## 2. Alcance vigente
 
-## 2. Alcance general del sistema
-
-El proyecto busca controlar el ciclo completo de recuperación de cartera:
+El flujo operativo es:
 
 ```text
-Fuente externa
-    -> clientes y obligaciones
-    -> cuotas
-    -> asignación de cartera
-    -> gestión o visita
-    -> pago, promesa, reprogramación o sin cobro
-    -> recibo
-    -> liquidación
-    -> reportes
+DOC_MADRE de la empresa mandante
+    -> cartera operativa
+    -> asignación a cobradores
+    -> visita o gestión
+    -> cobro y recibo
+    -> exportación diaria
+    -> aplicación en la base de la empresa mandante
 ```
 
-La solución prevista está compuesta por:
+La aplicación administra clientes, obligaciones, empresas mandantes, asignaciones, visitas, gestiones, cobros operativos, recibos y exportaciones.
 
-- un panel web administrativo;
-- una base de datos central como fuente de verdad;
-- una API para integraciones y operación móvil;
-- una aplicación móvil para cobradores;
-- procesos de sincronización offline-first;
-- auditoría de las operaciones relevantes.
+La aplicación no calcula mora, no realiza análisis financiero, no liquida dinero y no reemplaza la base de datos de la empresa mandante. El DOC_MADRE es la fuente del saldo y estado externos. Nuestra aplicación registra la operación realizada y la entrega para que la empresa mandante la aplique en su propia base.
 
 ## 3. Convención de estados
 
-- **Realizado**: existe código, estructura de datos y pruebas o validación funcional.
-- **Parcial**: existe una base o una decisión de diseño, pero falta completar el proceso.
-- **Pendiente**: todavía no existe la funcionalidad en el proyecto.
-- **Bloqueado por definición**: requiere una decisión del negocio antes de implementarse correctamente.
+- **Realizado**: existe código y pruebas o validación funcional.
+- **Parcial**: existe una base, pero falta completar el proceso.
+- **Pendiente**: todavía no existe la funcionalidad.
+- **No aplica**: no pertenece al alcance operativo vigente.
+- **Bloqueado por definición**: requiere una decisión del negocio.
 
-## 4. Fase inicial: análisis y definición de la fuente
+## 4. Fuente y reglas de cartera
 
 ### 4.1 Analizar el archivo real de cartera — Realizado
 
-Se revisó el archivo fuente utilizado por el negocio para conocer:
-
-- nombre y estructura de la hoja;
-- cantidad de columnas;
-- cantidad de filas;
-- campos de clientes;
-- campos de obligaciones;
-- campos calculados de mora y rangos;
-- valores vacíos y datos incompletos;
-- posibles duplicados.
+Se revisó el archivo fuente para conocer hoja, columnas, filas, datos de clientes, obligaciones, valores calculados, vacíos y posibles duplicados.
 
 El archivo analizado tiene 47 columnas y una fila por obligación o documento.
 
 ### 4.2 Definir el grano de la información — Realizado
 
-Se estableció que una fila del archivo representa una obligación/documento asociado a un cliente.
+Una fila representa una obligación asociada a un cliente.
 
-El cliente se identifica inicialmente por `CodigoCliente`.
+El cliente se identifica por empresa mandante + `CodigoCliente`.
 
 La obligación se identifica por:
 
 ```text
-cliente + número de documento + fecha del documento
+empresa mandante + cliente + número de documento + fecha del documento
 ```
 
-Esta regla evita duplicar una obligación cuando vuelve a aparecer en una importación posterior.
+### 4.3 Separar datos externos de datos operativos — Realizado
 
-### 4.3 Separar datos base de datos calculados — Realizado
-
-Se determinó que las columnas de antigüedad, mora, rangos y totales del Excel son datos derivados o de control del archivo fuente.
-
-Los valores principales que se almacenan son:
+Se conservan como datos externos:
 
 - fechas;
 - importe original;
-- saldo;
+- saldo reportado;
 - plazo;
 - estado de origen;
-- responsables;
-- cliente;
-- ubicación y contacto.
+- responsables informados;
+- datos del cliente.
 
-Los indicadores de mora y totales futuros deben recalcularse desde los datos base, evitando depender permanentemente de fórmulas o valores calculados del Excel.
+Las columnas de mora, antigüedad, rangos y totales del Excel no se convierten en análisis propios de la aplicación.
 
 ### 4.4 Resolver duplicados de documentos — Parcial
 
-El sistema ya tiene una clave técnica para evitar duplicados por cliente, documento y fecha.
+Existe una clave técnica por empresa, cliente, documento y fecha.
 
-Queda pendiente definir con el negocio qué hacer cuando el mismo número de documento aparece más de una vez con fechas, clientes o valores diferentes. Esta decisión debe quedar formalizada antes de construir reportes financieros definitivos.
+Queda pendiente definir con el negocio qué hacer cuando el mismo documento aparece con fechas, clientes o valores incompatibles, siempre que afecte la asignación o la gestión operativa.
 
-### 4.5 Confirmar significado de estados de origen — Bloqueado por definición
+### 4.5 Confirmar estados de origen — Bloqueado por definición
 
-Se detectaron valores de estado como `A`, `I`, `C`, `D`, `F`, `B` y `R`.
+Se detectaron estados `A`, `I`, `C`, `D`, `F`, `B` y `R`.
 
-Todavía falta confirmar su significado operativo con el negocio antes de convertirlos en una clasificación interna o en un enum. Por ahora se conservan como valores provenientes de la fuente.
+Se conservan como valores de la fuente hasta confirmar qué significado operativo deben tener para los cobradores.
 
-## 5. Fase actual: consolidación de cartera
+## 5. Consolidación de cartera
 
-### 5.1 Crear catálogo de clientes — Realizado
+### 5.1 Empresas mandantes — Realizado
+
+Existe `empresas_mandantes` y una pantalla administrativa para:
+
+- registrar empresas;
+- editar código y razón social;
+- habilitar o deshabilitar empresas;
+- consultar clientes y cortes asociados.
+
+Permisos:
+
+- `empresas.view`;
+- `empresas.create`;
+- `empresas.update`;
+- `empresas.delete` preparado para futuras operaciones.
+
+La primera empresa registrada para el proyecto fue BBO. Una empresa deshabilitada no aparece en el selector global ni puede recibir nuevas importaciones, pero conserva sus datos e historial.
+
+### 5.2 Empresa activa global — Realizado
+
+El usuario selecciona una empresa mandante desde la barra superior. La selección se conserva en sesión.
+
+La cartera, los filtros, el historial y la importación web trabajan únicamente con la empresa activa. Esto evita mezclar información entre mandantes.
+
+### 5.3 Catálogo de clientes — Realizado
 
 Existe la entidad `clientes` y el modelo `Cliente`.
 
-El proceso permite crear o actualizar clientes usando `CodigoCliente` como identificador externo único.
+Los clientes se crean o actualizan usando empresa mandante + `CodigoCliente` como identificador externo. Dos empresas pueden utilizar el mismo código sin mezclarse.
 
-La información actual incluye nombre, documento, contacto, dirección, ciudad, ubicación, coordenadas y límite de crédito.
-
-### 5.2 Crear catálogo de obligaciones — Realizado
+### 5.4 Catálogo de obligaciones — Realizado
 
 Existe la entidad `deudas` y el modelo `Deuda`.
 
-La obligación conserva sus fechas, importes, saldo, responsables, estado y origen del registro.
+La obligación conserva sus fechas, importes, saldo externo, responsables, estado y origen del registro.
 
-La tabla tiene una restricción única para evitar duplicar la misma obligación según la clave definida.
+### 5.5 Registrar cada importación — Realizado
 
-### 5.3 Registrar cada importación — Realizado
+Existe `importacion_carteras` y cada proceso registra:
 
-Existe la entidad `importacion_carteras` y el modelo `ImportacionCartera`.
-
-Cada proceso registra:
-
-- archivo;
-- hash SHA-256;
+- empresa mandante;
+- archivo y hash SHA-256;
 - hoja procesada;
 - estado;
 - filas leídas y omitidas;
-- clientes creados y encontrados;
+- clientes creados y actualizados;
 - obligaciones nuevas, actualizadas y sin cambios;
-- saldo total reportado;
+- obligaciones ausentes y reingresadas;
+- saldo reportado;
 - fecha de proceso.
 
-### 5.4 Importar archivos Excel — Realizado
+### 5.6 Importar archivos Excel — Realizado
 
-Existe el comando `cartera:importar` y una entrada web para cargar el archivo.
+Existe el comando `cartera:importar` y la entrada web.
 
-El flujo actual:
+El flujo valida el formato oficial de 47 columnas, procesa filas, crea o actualiza clientes y obligaciones, audita cambios y confirma o revierte la transacción.
 
-1. recibe XLSX o XLS;
-2. identifica el lector adecuado;
-3. calcula el hash del archivo;
-4. rechaza archivos repetidos;
-5. valida exactamente las 47 columnas oficiales;
-6. procesa las filas;
-7. crea o actualiza clientes;
-8. crea o actualiza obligaciones;
-9. registra el resultado;
-10. confirma o revierte la transacción.
+La pantalla muestra la empresa activa y una barra de progreso durante la carga del DOC_MADRE.
 
-### 5.5 Validar formato y datos mínimos — Realizado
+### 5.7 Validar formato y datos mínimos — Realizado
 
-Se rechaza un archivo si su encabezado no coincide exactamente con el formato oficial.
-
-Por fila se validan como mínimos:
+Se validan encabezados exactos y como mínimo:
 
 - código de cliente;
 - nombre de cliente;
@@ -164,360 +150,158 @@ Por fila se validan como mínimos:
 - saldo;
 - fecha válida.
 
-Las filas incompletas o inválidas se cuentan como omitidas, mientras que un error estructural del archivo detiene el proceso completo.
+### 5.8 Evitar reprocesamiento — Realizado
 
-### 5.6 Evitar reprocesamiento del mismo archivo — Realizado
+El hash SHA-256 impide procesar dos veces el mismo archivo.
 
-El hash SHA-256 y la restricción única de la base de datos evitan procesar dos veces el mismo contenido.
+### 5.9 Simulación — Realizado
 
-Cambiar saldos u otros valores genera un hash diferente y permite procesar el nuevo corte, siempre que el formato de columnas se conserve.
+El comando acepta `--simular` y revierte toda la transacción. No persiste empresas, clientes, obligaciones, auditorías ni importaciones.
 
-### 5.7 Ejecutar simulación — Realizado
+### 5.10 Auditoría de obligaciones — Realizado
 
-El comando soporta el modo `--simular`.
+`actualizacion_deudas` conserva valores anteriores y nuevos cuando cambian datos externos de una obligación.
 
-En este modo se ejecuta la lectura, validación y cálculo de resultados, pero la transacción se revierte al final. No deben persistirse clientes, obligaciones, auditorías ni el registro de importación.
+### 5.11 Consulta de cartera — Realizado
 
-### 5.8 Auditar cambios de obligaciones — Realizado
+La pantalla permite consultar y filtrar por texto, ciudad, vendedor, supervisor y estado, siempre dentro de la empresa activa.
 
-Existe la entidad `actualizacion_deudas` y el modelo `ActualizacionDeuda`.
+### 5.12 Historial de importaciones — Realizado
 
-Cuando cambia un campo auditable de una obligación existente, se guardan los valores anteriores y nuevos. La auditoría se vincula con la importación que detectó el cambio.
+El historial se muestra en un modal con archivo, estado, filas, nuevas, actualizadas, ausentes, reingresadas y fecha de proceso.
 
-### 5.9 Consultar y filtrar cartera — Realizado
+### 5.13 Comparación de cortes — Realizado
 
-La pantalla web de cartera permite consultar obligaciones junto con su cliente y filtrar por:
+Cada importación se compara con el último corte completado de la misma empresa.
 
-- texto libre;
-- ciudad;
-- vendedor;
-- supervisor;
-- estado.
+Una obligación puede quedar como:
 
-También muestra un resumen calculado sobre el conjunto filtrado:
+- `presente`;
+- `ausente`;
+- `reingresada`.
 
-- cantidad de obligaciones;
-- cantidad de clientes;
-- saldo total reportado.
+Una ausencia no significa pago, cierre ni eliminación. La obligación conserva su historial porque la empresa mandante puede haber gestionado el cobro por su propio canal.
 
-### 5.10 Consultar historial de importaciones — Realizado
+## 6. Procesos operativos pendientes
 
-El historial se muestra en un modal separado de la tabla principal.
+### 6.1 Asignación de cartera — Pendiente
 
-Actualmente presenta los últimos procesos ordenados por fecha de proceso descendente, utilizando el identificador como desempate. Muestra filas procesadas, obligaciones nuevas, obligaciones actualizadas, estado y fecha.
+Debe permitir asignar clientes u obligaciones a equipos, supervisores, vendedores y cobradores.
 
-### 5.11 Control de acceso del módulo — Realizado
+Debe conservar responsable, ámbito, fechas, usuario que asigna, historial y regla contra asignaciones incompatibles.
 
-Se definieron permisos específicos:
+### 6.2 Gestión de cobranza — Pendiente
 
-- `cartera.view`: consultar cartera e historial;
-- `cartera.import`: cargar un nuevo archivo.
-
-Las rutas web están protegidas con autenticación y permisos.
-
-## 6. Procesos pendientes sobre la cartera
-
-### 6.1 Manejo de obligaciones ausentes en un nuevo corte — Pendiente
-
-Debe definirse qué significa que una obligación que existía en un corte anterior no aparezca en el nuevo archivo.
-
-Opciones a decidir:
-
-- marcarla como ausente del corte;
-- marcarla como cerrada o retirada;
-- conservarla visible con el último estado conocido;
-- generar una novedad para revisión.
-
-No se debe eliminar automáticamente una obligación sin una regla de negocio aprobada.
-
-### 6.2 Recalcular mora y estado de vencimiento — Pendiente
-
-Debe construirse una lógica propia para calcular:
-
-- días de mora;
-- estado vigente o vencido;
-- rangos de mora;
-- antigüedad;
-- totales por cliente, vendedor, supervisor y cartera.
-
-Esta lógica debe utilizar fechas, importe y saldo almacenados, no depender de las fórmulas del archivo externo.
-
-### 6.3 Crear cuotas o planes de pago — Pendiente
-
-El modelo actual maneja la obligación completa, pero todavía no existe un modelo de cuotas.
-
-Debe definirse:
-
-- si todas las obligaciones tienen cuotas;
-- cómo se genera el plan;
-- fechas programadas;
-- capital, intereses y otros conceptos;
-- estado de cada cuota;
-- relación entre cuota y obligación;
-- comportamiento cuando cambia el saldo externo.
-
-### 6.4 Definir asignación de cartera — Pendiente
-
-Debe construirse el proceso para asignar obligaciones a equipos, vendedores, supervisores o cobradores.
-
-La asignación debe conservar:
-
-- responsable;
-- ámbito de cartera;
-- fecha de inicio y fin;
-- usuario que asignó;
-- historial de reasignaciones;
-- regla para evitar asignaciones simultáneas incompatibles.
-
-Los responsables que vienen del archivo son datos de origen y no sustituyen necesariamente una asignación operativa interna.
-
-### 6.5 Crear gestión de cobranza — Pendiente
-
-Debe registrarse cada contacto o visita realizada sobre una obligación o cliente.
-
-El proceso debe distinguir claramente entre:
+Debe registrar cada visita o contacto y su resultado:
 
 - gestión realizada;
-- promesa de pago;
-- pago recibido;
+- cobro registrado;
+- promesa, si el negocio la requiere;
 - reprogramación;
 - sin contacto;
-- negativa de pago;
+- negativa;
 - dirección incorrecta;
 - visita pendiente.
 
-Una gestión no debe modificar por sí sola el saldo externo ni convertirse automáticamente en un pago.
+Una gestión no modifica el saldo externo.
 
-### 6.6 Registrar operación móvil de campo — Pendiente
+### 6.3 Cobros operativos — Pendiente
 
-La futura aplicación móvil deberá permitir trabajar con cartera asignada incluso sin conexión.
+Los cobros realizados por nuestra empresa se registrarán para exportación, no como liquidación contable definitiva.
 
-Requisitos previstos:
+Deben incluir monto, fecha, obligación, medio, usuario, canal, referencia, estado de exportación y correcciones o anulaciones operativas.
 
-- descarga de cartera asignada;
-- almacenamiento local temporal;
-- registro offline de gestiones;
-- fecha y hora del dispositivo;
-- GPS;
-- evidencias o fotografías cuando correspondan;
-- cola de sincronización;
-- reintentos seguros;
-- identificación idempotente de operaciones.
+### 6.4 Recibos — Pendiente
 
-### 6.7 Crear API para sincronización — Pendiente
+Cada cobro registrado podrá generar un recibo numerado y trazable, con representación digital y futura integración POS si se requiere.
 
-Debe definirse una API versionada para:
+### 6.5 Exportación diaria — Pendiente
 
-- autenticar la aplicación móvil;
-- entregar cartera asignada;
-- recibir gestiones;
-- recibir pagos;
-- enviar evidencias;
-- consultar resultados de sincronización;
-- resolver conflictos.
+Al finalizar la jornada se debe generar un archivo para la empresa mandante con:
 
-La API debe ser idempotente. Reenviar una operación por pérdida de conexión no debe duplicar gestiones ni pagos.
+- empresa mandante;
+- fecha de operación;
+- cobrador;
+- cliente y obligación;
+- tipo y resultado de gestión;
+- cobro registrado;
+- recibo;
+- observaciones y evidencias;
+- identificador único idempotente;
+- estado de exportación.
 
-### 6.8 Registrar pagos — Pendiente
+La empresa mandante aplicará estos registros en su propia base de datos.
 
-Los pagos deben existir como entidad propia y no sobrescribir directamente el saldo recibido desde la fuente externa.
+## 7. Procesos fuera del alcance inicial
 
-Debe definirse:
+### 7.1 Cálculo de mora y análisis financiero — No aplica
 
-- monto;
-- fecha y hora;
-- obligación o cuota afectada;
-- medio de pago;
-- usuario que registra;
-- origen web o móvil;
-- referencia externa;
-- estado de validación;
-- reversión o anulación.
+La aplicación no calculará mora, antigüedad, rangos, recuperación, productividad financiera ni indicadores contables.
 
-La aplicación debe diferenciar saldo externo, pagos internos y saldo calculado para cobranza.
+### 7.2 Cuotas y planes internos — No aplica inicialmente
 
-### 6.9 Registrar promesas y reprogramaciones — Pendiente
+No se crearán cuotas ni planes internos mientras la empresa mandante no los entregue o solicite expresamente.
 
-Debe existir un proceso para registrar:
+### 7.3 Liquidaciones financieras — No aplica
 
-- monto prometido;
-- fecha prometida;
-- cuotas o documentos incluidos;
-- condiciones acordadas;
-- resultado de la promesa;
-- incumplimiento;
-- nueva fecha o reprogramación.
+La aplicación no controlará entrega de dinero ni realizará liquidaciones financieras. La empresa mandante conciliará sus registros en su propia base.
 
-Una promesa no debe contabilizarse como pago hasta que exista un pago confirmado.
+## 8. Operación móvil y API
 
-### 6.10 Generar recibos — Pendiente
+### 8.1 Operación móvil de campo — Pendiente
 
-Para pagos confirmados debe generarse un recibo con numeración y trazabilidad.
+Debe contemplar cartera asignada, trabajo offline, GPS, evidencias, cola de sincronización, reintentos e identificación idempotente.
 
-La solución prevista contempla impresión desde dispositivos POS mediante Bluetooth y ESC/POS, además de una representación digital consultable.
+### 8.2 API de sincronización — Pendiente
 
-Debe definirse:
+Debe definir autenticación móvil, descarga de cartera, recepción de gestiones/cobros, evidencias, resultados y conflictos.
 
-- numeración;
-- formato;
-- datos obligatorios;
-- reimpresión;
-- anulación;
-- control de duplicados;
-- relación con liquidaciones.
+## 9. Requisitos transversales
 
-### 6.11 Crear liquidaciones — Pendiente
+### 9.1 Auditoría completa — Parcial
 
-Debe construirse el proceso para consolidar pagos y recibos por periodo, cobrador, vendedor o equipo.
+La importación y cambios externos ya tienen auditoría. Debe ampliarse a asignaciones, gestiones, cobros, recibos, exportaciones y anulaciones.
 
-Debe incluir:
+### 9.2 Calidad de datos — Parcial
 
-- periodo;
-- responsable;
-- efectivo, transferencias u otros medios;
-- total esperado;
-- total entregado;
-- diferencias;
-- estado de liquidación;
-- aprobación;
-- auditoría de modificaciones.
+Queda pendiente formalizar validaciones de valores fuera de rango, fechas inconsistentes, saldos negativos, duplicados incompatibles, estados desconocidos, datos de contacto incompletos y obligaciones ausentes.
 
-### 6.12 Construir reportes operativos y financieros — Pendiente
+### 9.3 Pruebas de negocio — Parcial
 
-Los reportes deben construirse después de cerrar las reglas de cartera, pagos y liquidaciones.
+La cartera y comparación de cortes tienen pruebas. Deben agregarse pruebas para asignaciones, gestiones, cobros, recibos, exportaciones repetidas o rechazadas y permisos por rol y ámbito.
 
-Reportes previstos:
+### 9.4 Rendimiento — Pendiente
 
-- cartera total;
-- cartera vencida;
-- mora por rango;
-- recuperación por periodo;
-- promesas cumplidas e incumplidas;
-- productividad por cobrador;
-- pagos por medio;
-- diferencias de liquidación;
-- variaciones entre cortes externos.
+Antes de manejar archivos mucho mayores debe evaluarse procesamiento por lotes, límites de memoria, colas, reanudación, progreso y bloqueo de importaciones simultáneas.
 
-## 7. Requisitos transversales pendientes
+## 10. Orden recomendado
 
-### 7.1 Auditoría completa — Parcial
+1. Confirmar estados de origen que verá el cobrador.
+2. Resolver duplicados que afecten la gestión.
+3. Implementar equipos y asignación de cartera.
+4. Implementar gestiones y resultados.
+5. Implementar cobros operativos.
+6. Generar recibos.
+7. Diseñar y generar exportación diaria.
+8. Agregar identificadores idempotentes y control de entregas.
+9. Implementar aplicación móvil y sincronización.
+10. Completar auditoría y pruebas del ciclo operativo.
 
-La importación y los cambios de obligaciones ya tienen auditoría.
+## 11. Estado de referencia
 
-Debe ampliarse la trazabilidad a:
+La consolidación de cartera está funcional:
 
-- asignaciones;
-- gestiones;
-- pagos;
-- promesas;
-- recibos;
-- liquidaciones;
-- anulaciones y correcciones.
+- empresa mandante BBO registrada y aislada;
+- empresa activa seleccionable por sesión;
+- clientes y obligaciones persistidos por empresa;
+- importación web y por comando;
+- validación exacta del formato;
+- control de archivos repetidos;
+- simulación sin persistencia;
+- auditoría de cambios externos;
+- comparación de cortes con ausencias y reingresos;
+- filtros e historial;
+- barra de progreso de carga;
+- permisos y pruebas automatizadas.
 
-Cada operación crítica debe registrar quién, cuándo, qué cambió y desde qué canal.
-
-### 7.2 Reglas de calidad de datos — Parcial
-
-Ya se validan estructura y campos mínimos del archivo.
-
-Queda pendiente formalizar validaciones para:
-
-- valores numéricos fuera de rango;
-- fechas inconsistentes;
-- saldos negativos;
-- documentos duplicados con datos incompatibles;
-- códigos de cliente que cambian de identidad;
-- estados desconocidos;
-- datos de contacto incompletos;
-- obligaciones ausentes de un corte.
-
-### 7.3 Pruebas de negocio — Parcial
-
-La etapa de cartera ya tiene pruebas para acceso, filtros, importación, formato, duplicados, simulación y auditoría básica.
-
-Deben agregarse pruebas para las siguientes etapas antes de habilitarlas:
-
-- ausencia de obligaciones en nuevos cortes;
-- recalculo de mora;
-- asignaciones y reasignaciones;
-- sincronización móvil repetida;
-- pagos y reversos;
-- promesas incumplidas;
-- recibos y liquidaciones;
-- permisos por rol y ámbito de cartera.
-
-### 7.4 Rendimiento de importaciones grandes — Pendiente
-
-La importación actual procesa filas dentro de una transacción única. Antes de manejar archivos mucho mayores debe evaluarse:
-
-- procesamiento por lotes;
-- límites de memoria;
-- tiempos máximos de la petición web;
-- ejecución en cola;
-- reanudación de importaciones;
-- reporte de progreso;
-- bloqueo de importaciones simultáneas.
-
-## 8. Orden recomendado para continuar
-
-### Etapa A: cerrar reglas de cartera
-
-1. Definir obligaciones ausentes en nuevos cortes.
-2. Confirmar estados de origen.
-3. Resolver duplicados de documentos.
-4. Implementar cálculo propio de mora y vencimiento.
-5. Ampliar validaciones de calidad.
-
-### Etapa B: cuotas y asignaciones
-
-6. Diseñar cuotas o planes de pago.
-7. Diseñar equipos y responsables operativos.
-8. Implementar asignación y reasignación.
-9. Agregar historial de asignaciones.
-
-### Etapa C: gestión de cobranza
-
-10. Crear gestiones y resultados.
-11. Crear promesas y reprogramaciones.
-12. Crear agenda, visitas y evidencias.
-13. Aplicar reglas de cartera asignada.
-
-### Etapa D: pagos y documentos
-
-14. Crear pagos internos separados del saldo externo.
-15. Definir validación y reversión de pagos.
-16. Generar recibos.
-17. Crear liquidaciones.
-
-### Etapa E: API y aplicación móvil
-
-18. Diseñar contratos de API.
-19. Implementar autenticación móvil.
-20. Implementar descarga de cartera asignada.
-21. Implementar cola offline y sincronización idempotente.
-22. Integrar GPS, evidencias y recibos POS.
-
-### Etapa F: reportes y cierre operativo
-
-23. Crear reportes de cartera y mora.
-24. Crear reportes de recuperación.
-25. Crear reportes de productividad.
-26. Crear reportes de liquidación.
-27. Completar auditoría y pruebas de todo el ciclo.
-
-## 9. Estado de referencia al cierre de esta etapa
-
-La primera etapa funcional terminada es la consolidación de cartera desde Excel:
-
-- existen clientes y obligaciones persistidos;
-- existe importación web y por comando;
-- existe validación exacta del formato oficial;
-- existe control de archivos repetidos por hash;
-- existe simulación sin persistencia;
-- existe actualización de saldos y datos auditables;
-- existe historial de importaciones;
-- existen filtros y resumen de cartera;
-- existe control de acceso específico;
-- existe cobertura automatizada del flujo actual.
-
-El siguiente bloque recomendado es cerrar las reglas de negocio de cartera antes de crear pagos, cuotas o operación móvil. Esas decisiones afectan la estructura de datos y deben quedar resueltas para evitar reconstrucciones posteriores.
+El siguiente bloque funcional es asignación, gestión de cobranza, cobro operativo, recibo y exportación diaria a la empresa mandante.

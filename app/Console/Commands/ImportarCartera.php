@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Models\ActualizacionDeuda;
 use App\Models\Cliente;
 use App\Models\Deuda;
+use App\Models\EmpresaMandante;
 use App\Models\ImportacionCartera;
+use App\Models\PresenciaDeudaCorte;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -18,10 +20,13 @@ use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Throwable;
 
-#[Signature('cartera:importar {archivo=DOC_MADRE.xlsx : Ruta del archivo XLSX} {--simular : Valida sin guardar cambios}')]
+#[Signature('cartera:importar {archivo=DOC_MADRE.xlsx : Ruta del archivo XLSX} {--empresa=BBO : Código de la empresa mandante} {--simular : Valida sin guardar cambios}')]
 #[Description('Importa clientes y deudas desde un archivo Excel de cartera.')]
 class ImportarCartera extends Command
 {
+    /** @var array<int, true> */
+    private array $deudasPresentes = [];
+
     /**
      * Importa clientes y obligaciones preservando la fila de origen.
      */
@@ -52,6 +57,7 @@ class ImportarCartera extends Command
                 basename($archivo),
                 $hashArchivo,
                 $archivoResguardado,
+                (string) $this->option('empresa'),
                 (bool) $this->option('simular'),
             );
         } catch (Throwable $exception) {
@@ -65,6 +71,17 @@ class ImportarCartera extends Command
         $this->info($this->option('simular') ? 'Simulación completada. No se guardaron cambios.' : 'Importación completada correctamente.');
 
         return self::SUCCESS;
+    }
+
+    private function resolverEmpresaMandante(string $codigo): EmpresaMandante
+    {
+        $codigo = Str::upper(Str::squish($codigo));
+
+        if ($codigo === '') {
+            throw new \InvalidArgumentException('Debe indicar una empresa mandante válida.');
+        }
+
+        return EmpresaMandante::firstOrCreate(['codigo' => $codigo], ['razon_social' => $codigo]);
     }
 
     private function resolverArchivo(string $archivo): ?string
@@ -89,17 +106,26 @@ class ImportarCartera extends Command
     }
 
     /** @return array<string, int> */
-    private function importar(Worksheet $hoja, string $archivo, string $hashArchivo, ?string $archivoResguardado, bool $simular): array
+    private function importar(Worksheet $hoja, string $archivo, string $hashArchivo, ?string $archivoResguardado, string $codigoEmpresaMandante, bool $simular): array
     {
         $columnas = $this->columnas($hoja);
         $this->verificarColumnas($columnas);
 
         $resultado = ['filas_leidas' => 0, 'filas_omitidas' => 0, 'clientes_creados' => 0, 'clientes_actualizados' => 0, 'deudas_creadas' => 0, 'deudas_actualizadas' => 0, 'deudas_sin_cambios' => 0, 'saldo_reportado' => 0];
+        $this->deudasPresentes = [];
 
         DB::beginTransaction();
 
         try {
+            $empresaMandante = $this->resolverEmpresaMandante($codigoEmpresaMandante);
+            $importacionAnterior = ImportacionCartera::query()
+                ->where('empresa_mandante_id', $empresaMandante->id)
+                ->where('estado', 'completada')
+                ->orderByDesc('procesado_en')
+                ->orderByDesc('id')
+                ->first();
             $importacion = ImportacionCartera::create([
+                'empresa_mandante_id' => $empresaMandante->id,
                 'nombre_archivo' => $archivo,
                 'hash_archivo' => $hashArchivo,
                 'archivo_resguardado' => $archivoResguardado,
@@ -112,7 +138,7 @@ class ImportarCartera extends Command
 
                 try {
                     $this->validarFila($fila, $columnas);
-                    $cliente = $this->importarCliente($fila, $columnas);
+                    $cliente = $this->importarCliente($fila, $columnas, $empresaMandante);
                     $resultado[$cliente->wasRecentlyCreated ? 'clientes_creados' : 'clientes_actualizados']++;
                     $resultado['saldo_reportado'] += (float) $this->requerido($fila, $columnas, 'Saldo');
                     $resultado[$this->importarDeuda($fila, $columnas, $cliente->id, $archivo, $numeroFila, $importacion)]++;
@@ -121,8 +147,12 @@ class ImportarCartera extends Command
                 }
             }
 
+            $comparacion = $this->registrarComparacion($importacion, $importacionAnterior);
+            $resultado = [...$resultado, ...$comparacion];
+
             $importacion->update([
                 ...$resultado,
+                ...$comparacion,
                 'estado' => 'completada',
                 'procesado_en' => now(),
             ]);
@@ -134,6 +164,44 @@ class ImportarCartera extends Command
         }
 
         return $resultado;
+    }
+
+    /** @return array{deudas_ausentes: int, deudas_reingresadas: int} */
+    private function registrarComparacion(ImportacionCartera $importacion, ?ImportacionCartera $importacionAnterior): array
+    {
+        $deudasAnteriores = $importacionAnterior?->presenciasDeuda()
+            ->whereIn('estado', ['presente', 'reingresada'])
+            ->pluck('deuda_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all() ?? [];
+        $deudasAusentesAnteriores = $importacionAnterior?->presenciasDeuda()
+            ->where('estado', 'ausente')
+            ->pluck('deuda_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all() ?? [];
+
+        foreach (array_keys($this->deudasPresentes) as $deudaId) {
+            PresenciaDeudaCorte::create([
+                'importacion_cartera_id' => $importacion->id,
+                'deuda_id' => $deudaId,
+                'estado' => in_array($deudaId, $deudasAusentesAnteriores, true) ? 'reingresada' : 'presente',
+            ]);
+        }
+
+        $deudasAusentes = array_diff($deudasAnteriores, array_keys($this->deudasPresentes));
+
+        foreach ($deudasAusentes as $deudaId) {
+            PresenciaDeudaCorte::create([
+                'importacion_cartera_id' => $importacion->id,
+                'deuda_id' => $deudaId,
+                'estado' => 'ausente',
+            ]);
+        }
+
+        return [
+            'deudas_ausentes' => count($deudasAusentes),
+            'deudas_reingresadas' => count(array_intersect(array_keys($this->deudasPresentes), $deudasAusentesAnteriores)),
+        ];
     }
 
     /** @param array<int, mixed> $fila @param array<string, int> $columnas */
@@ -219,9 +287,12 @@ class ImportarCartera extends Command
     }
 
     /** @param array<int, mixed> $fila @param array<string, int> $columnas */
-    private function importarCliente(array $fila, array $columnas): Cliente
+    private function importarCliente(array $fila, array $columnas, EmpresaMandante $empresaMandante): Cliente
     {
-        return Cliente::updateOrCreate(['codigo_externo' => $this->requerido($fila, $columnas, 'CodigoCliente')], [
+        return Cliente::updateOrCreate([
+            'empresa_mandante_id' => $empresaMandante->id,
+            'codigo_externo' => $this->requerido($fila, $columnas, 'CodigoCliente'),
+        ], [
             'nombre' => $this->requerido($fila, $columnas, 'Cliente'), 'documento_identidad' => $this->valor($fila, $columnas, 'rutId'),
             'telefono' => $this->valor($fila, $columnas, 'Telefono'), 'direccion' => $this->valor($fila, $columnas, 'DIRECCION'),
             'ciudad' => $this->valor($fila, $columnas, 'ciuNombre'), 'tipo_ubicacion' => $this->valor($fila, $columnas, 'cliLugar'),
@@ -261,6 +332,7 @@ class ImportarCartera extends Command
         ]);
         $cambio = $esNueva || $deuda->isDirty($this->camposAuditables());
         $deuda->save();
+        $this->deudasPresentes[$deuda->id] = true;
 
         if ($cambio) {
             ActualizacionDeuda::create([

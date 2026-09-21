@@ -6,6 +6,7 @@ use Database\Factories\DeudaFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Deuda extends Model
 {
@@ -39,5 +40,11 @@ class Deuda extends Model
     public function importacionCartera(): BelongsTo
     {
         return $this->belongsTo(ImportacionCartera::class);
+    }
+
+    /** Historial de presencia de la obligación en los cortes recibidos. */
+    public function presenciasCorte(): HasMany
+    {
+        return $this->hasMany(PresenciaDeudaCorte::class);
     }
 }

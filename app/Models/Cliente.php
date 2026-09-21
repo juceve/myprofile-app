@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\ClienteFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cliente extends Model
@@ -14,7 +15,7 @@ class Cliente extends Model
 
     /** @var list<string> */
     protected $fillable = [
-        'codigo_externo', 'nombre', 'documento_identidad', 'telefono', 'direccion',
+        'empresa_mandante_id', 'codigo_externo', 'nombre', 'documento_identidad', 'telefono', 'direccion',
         'ciudad', 'tipo_ubicacion', 'longitud', 'latitud', 'limite_credito',
     ];
 
@@ -22,6 +23,12 @@ class Cliente extends Model
     protected function casts(): array
     {
         return ['latitud' => 'decimal:7', 'limite_credito' => 'decimal:2', 'longitud' => 'decimal:7'];
+    }
+
+    /** Empresa que entregó la cartera del cliente. */
+    public function empresaMandante(): BelongsTo
+    {
+        return $this->belongsTo(EmpresaMandante::class);
     }
 
     /** Obligaciones registradas para el cliente. */

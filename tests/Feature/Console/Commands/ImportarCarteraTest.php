@@ -4,6 +4,7 @@ namespace Tests\Feature\Console\Commands;
 
 use App\Models\ActualizacionDeuda;
 use App\Models\ImportacionCartera;
+use App\Models\PresenciaDeudaCorte;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -50,6 +51,36 @@ class ImportarCarteraTest extends TestCase
 
         $this->assertSame('500.00', $actualizacion->valores_anteriores['saldo_actual']);
         $this->assertSame('200.00', $actualizacion->valores_nuevos['saldo_actual']);
+    }
+
+    public function test_compara_cortes_y_registra_ausencias_y_reingresos(): void
+    {
+        $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([
+            $this->fila('1001', '204469', 1000, 500),
+            $this->fila('1001', '204470', 800, 300),
+        ], 'corte-1.xlsx')])->assertSuccessful();
+
+        $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([
+            $this->fila('1001', '204469', 1000, 400),
+        ], 'corte-2.xlsx')])->assertSuccessful();
+
+        $segundoCorte = ImportacionCartera::where('nombre_archivo', 'corte-2.xlsx')->firstOrFail();
+        $this->assertSame(1, $segundoCorte->deudas_ausentes);
+        $this->assertSame(0, $segundoCorte->deudas_reingresadas);
+        $this->assertDatabaseHas('presencia_deuda_cortes', [
+            'importacion_cartera_id' => $segundoCorte->id,
+            'estado' => 'ausente',
+        ]);
+
+        $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([
+            $this->fila('1001', '204469', 1000, 400),
+            $this->fila('1001', '204470', 800, 300),
+        ], 'corte-3.xlsx')])->assertSuccessful();
+
+        $tercerCorte = ImportacionCartera::where('nombre_archivo', 'corte-3.xlsx')->firstOrFail();
+        $this->assertSame(0, $tercerCorte->deudas_ausentes);
+        $this->assertSame(1, $tercerCorte->deudas_reingresadas);
+        $this->assertSame('reingresada', PresenciaDeudaCorte::where('importacion_cartera_id', $tercerCorte->id)->where('estado', 'reingresada')->value('estado'));
     }
 
     public function test_rechaza_un_archivo_que_ya_fue_procesado(): void
@@ -102,10 +133,11 @@ class ImportarCarteraTest extends TestCase
 
     public function test_simulacion_no_guarda_registros(): void
     {
-        $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([$this->fila('1001', '204469', 1000, 500)]), '--simular' => true])
+        $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([$this->fila('1001', '204469', 1000, 500)]), '--empresa' => 'SIMULADA', '--simular' => true])
             ->expectsOutput('Simulación completada. No se guardaron cambios.')
             ->assertSuccessful();
 
+        $this->assertDatabaseCount('empresa_mandantes', 0);
         $this->assertDatabaseCount('clientes', 0);
         $this->assertDatabaseCount('deudas', 0);
     }

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Cliente;
+use App\Models\EmpresaMandante;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,6 +19,7 @@ class ClienteFactory extends Factory
     public function definition(): array
     {
         return [
+            'empresa_mandante_id' => EmpresaMandante::factory(),
             'codigo_externo' => fake()->unique()->numerify('CLI-######'),
             'nombre' => fake()->name(),
             'documento_identidad' => fake()->numerify('########'),

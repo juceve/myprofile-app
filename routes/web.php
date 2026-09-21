@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CarteraController;
+use App\Http\Controllers\EmpresaMandanteController;
 use App\Http\Controllers\RoleController;
 use App\Livewire\Actions\Logout;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,22 @@ Route::get('cartera', [CarteraController::class, 'index'])
 Route::post('cartera/importar', [CarteraController::class, 'importar'])
     ->middleware(['auth', 'permission:cartera.import'])
     ->name('cartera.importar');
+
+Route::get('empresas-mandantes', [EmpresaMandanteController::class, 'index'])
+    ->middleware(['auth', 'permission:empresas.view'])
+    ->name('empresas-mandantes.index');
+
+Route::post('empresas-mandantes', [EmpresaMandanteController::class, 'store'])
+    ->middleware(['auth', 'permission:empresas.create'])
+    ->name('empresas-mandantes.store');
+
+Route::put('empresas-mandantes/{empresaMandante}', [EmpresaMandanteController::class, 'update'])
+    ->middleware(['auth', 'permission:empresas.update'])
+    ->name('empresas-mandantes.update');
+
+Route::post('empresa-mandante/seleccionar', [EmpresaMandanteController::class, 'seleccionar'])
+    ->middleware(['auth', 'permission:empresas.view'])
+    ->name('empresa-mandante.seleccionar');
 
 Route::middleware(['auth', 'permission:roles.view'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
