@@ -48,6 +48,7 @@
                                 <th class="px-6 py-3 font-semibold">Razón social</th>
                                 <th class="px-6 py-3 font-semibold">Clientes</th>
                                 <th class="px-6 py-3 font-semibold">Cortes</th>
+                                <th class="px-6 py-3 font-semibold">Jefes de venta</th>
                                 <th class="px-6 py-3 font-semibold">Estado</th>
                                 <th class="px-6 py-3 text-right font-semibold">Acciones</th>
                             </tr>
@@ -59,6 +60,7 @@
                                     <td class="whitespace-nowrap px-6 py-4 font-semibold text-slate-800 dark:text-slate-200">{{ $empresaMandante->razon_social }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ number_format($empresaMandante->clientes_count) }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ number_format($empresaMandante->importaciones_cartera_count) }}</td>
+                                    <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ number_format($empresaMandante->jefes_venta_count) }}</td>
                                     <td class="px-6 py-4">
                                         <x-badge :variant="$empresaMandante->activo ? 'success' : 'neutral'">{{ $empresaMandante->activo ? 'Activa' : 'Inactiva' }}</x-badge>
                                     </td>
@@ -93,7 +95,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">No hay empresas mandantes registradas.</td>
+                                    <td colspan="7" class="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">No hay empresas mandantes registradas.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CarteraController;
 use App\Http\Controllers\EmpresaMandanteController;
+use App\Http\Controllers\JefeVentaController;
 use App\Http\Controllers\RoleController;
 use App\Livewire\Actions\Logout;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,10 @@ Route::put('empresas-mandantes/{empresaMandante}', [EmpresaMandanteController::c
 Route::post('empresa-mandante/seleccionar', [EmpresaMandanteController::class, 'seleccionar'])
     ->middleware(['auth', 'permission:empresas.view'])
     ->name('empresa-mandante.seleccionar');
+
+Route::get('jefes-venta', [JefeVentaController::class, 'index'])
+    ->middleware(['auth', 'permission:empresas.view'])
+    ->name('jefes-venta.index');
 
 Route::middleware(['auth', 'permission:roles.view'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');

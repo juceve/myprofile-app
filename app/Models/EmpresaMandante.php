@@ -32,4 +32,10 @@ class EmpresaMandante extends Model
     {
         return $this->hasMany(ImportacionCartera::class);
     }
+
+    /** Jefes de ventas encontrados en los cortes de esta empresa. */
+    public function jefesVenta(): HasMany
+    {
+        return $this->hasMany(JefeVenta::class);
+    }
 }

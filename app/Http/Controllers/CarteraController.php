@@ -26,10 +26,12 @@ class CarteraController extends Controller
             'vendedor' => ['nullable', 'string', 'max:255'],
             'supervisor' => ['nullable', 'string', 'max:255'],
             'estado' => ['nullable', 'string', 'max:10'],
+            'situacion' => ['nullable', 'string', 'in:vigente,cancelada_por_mandante'],
         ]);
 
         $deudas = Deuda::query()
             ->with('cliente')
+            ->where('estado_operativo', $filtros['situacion'] ?? 'vigente')
             ->when($empresaMandante, fn ($query) => $query->whereHas('cliente', fn ($query) => $query->where('empresa_mandante_id', $empresaMandante->id)))
             ->when(! $empresaMandante, fn ($query) => $query->whereRaw('1 = 0'))
             ->when($filtros['buscar'] ?? null, function ($query, string $buscar): void {
@@ -89,7 +91,7 @@ class CarteraController extends Controller
                 return back()->with('error', $mensaje !== '' ? $mensaje : 'No se pudo importar la cartera.');
             }
 
-            return redirect()->route('cartera.index')->with('success', 'La cartera se importó correctamente.');
+            return redirect()->route('cartera.index')->with('success', 'La cartera se importó correctamente para '.$empresaMandante->codigo.' - '.$empresaMandante->razon_social.'.');
         } catch (Throwable $exception) {
             report($exception);
 

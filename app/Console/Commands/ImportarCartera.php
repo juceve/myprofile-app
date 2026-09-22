@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\Deuda;
 use App\Models\EmpresaMandante;
 use App\Models\ImportacionCartera;
+use App\Models\JefeVenta;
 use App\Models\PresenciaDeudaCorte;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -138,6 +139,7 @@ class ImportarCartera extends Command
 
                 try {
                     $this->validarFila($fila, $columnas);
+                    $this->registrarJefeVenta($fila, $columnas, $empresaMandante);
                     $cliente = $this->importarCliente($fila, $columnas, $empresaMandante);
                     $resultado[$cliente->wasRecentlyCreated ? 'clientes_creados' : 'clientes_actualizados']++;
                     $resultado['saldo_reportado'] += (float) $this->requerido($fila, $columnas, 'Saldo');
@@ -166,6 +168,21 @@ class ImportarCartera extends Command
         return $resultado;
     }
 
+    /** @param array<int, mixed> $fila @param array<string, int> $columnas */
+    private function registrarJefeVenta(array $fila, array $columnas, EmpresaMandante $empresaMandante): void
+    {
+        $nombre = $this->valor($fila, $columnas, 'entNombreJefeVendedor');
+
+        if ($nombre === null) {
+            return;
+        }
+
+        JefeVenta::firstOrCreate([
+            'empresa_mandante_id' => $empresaMandante->id,
+            'nombre' => $nombre,
+        ]);
+    }
+
     /** @return array{deudas_ausentes: int, deudas_reingresadas: int} */
     private function registrarComparacion(ImportacionCartera $importacion, ?ImportacionCartera $importacionAnterior): array
     {
@@ -175,7 +192,7 @@ class ImportarCartera extends Command
             ->map(fn (mixed $id): int => (int) $id)
             ->all() ?? [];
         $deudasAusentesAnteriores = $importacionAnterior?->presenciasDeuda()
-            ->where('estado', 'ausente')
+            ->where('estado', 'cancelada_por_mandante')
             ->pluck('deuda_id')
             ->map(fn (mixed $id): int => (int) $id)
             ->all() ?? [];
@@ -194,8 +211,9 @@ class ImportarCartera extends Command
             PresenciaDeudaCorte::create([
                 'importacion_cartera_id' => $importacion->id,
                 'deuda_id' => $deudaId,
-                'estado' => 'ausente',
+                'estado' => 'cancelada_por_mandante',
             ]);
+            Deuda::whereKey($deudaId)->update(['estado_operativo' => 'cancelada_por_mandante']);
         }
 
         return [
@@ -324,7 +342,7 @@ class ImportarCartera extends Command
             'fecha_documento' => $fechaDocumento,
             'fecha_vencimiento' => $this->fecha($this->valor($fila, $columnas, 'Vence')), 'importe_original' => $this->decimal($this->requerido($fila, $columnas, 'Importe')),
             'saldo_actual' => $this->decimal($this->requerido($fila, $columnas, 'Saldo')), 'plazo_dias' => $this->entero($this->valor($fila, $columnas, 'Plazo')),
-            'fecha_ultimo_pago' => $this->fecha($this->valor($fila, $columnas, 'FechaUltimoPago')), 'estado_origen' => $this->valor($fila, $columnas, 'Estado'),
+            'fecha_ultimo_pago' => $this->fecha($this->valor($fila, $columnas, 'FechaUltimoPago')), 'estado_origen' => $this->valor($fila, $columnas, 'Estado'), 'estado_operativo' => 'vigente',
             'jefe_vendedor_nombre' => $this->valor($fila, $columnas, 'entNombreJefeVendedor'), 'supervisor_nombre' => $this->valor($fila, $columnas, 'entNombreSupervisor'),
             'vendedor_nombre' => $this->valor($fila, $columnas, 'entNombreVendedor'), 'fecha_carga' => $this->fecha($this->valor($fila, $columnas, 'FECHA_CARGA')),
             'origen_archivo' => $archivo, 'origen_fila' => $numeroFila,

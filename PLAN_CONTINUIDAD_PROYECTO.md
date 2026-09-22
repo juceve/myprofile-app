@@ -110,13 +110,19 @@ Existe la entidad `clientes` y el modelo `Cliente`.
 
 Los clientes se crean o actualizan usando empresa mandante + `CodigoCliente` como identificador externo. Dos empresas pueden utilizar el mismo código sin mezclarse.
 
-### 5.4 Catálogo de obligaciones — Realizado
+### 5.4 Catálogo de jefes de venta — Realizado
+
+El campo `entNombreJefeVendedor` del DOC_MADRE alimenta el catálogo `jefe_ventas`, asociado a cada empresa mandante. Los nombres nuevos se agregan automáticamente durante la importación; los nombres existentes no se duplican y permanecen en el catálogo aunque dejen de aparecer en un corte posterior.
+
+El catálogo inicial de BBO quedó poblado con 34 jefes de ventas históricos.
+
+### 5.5 Catálogo de obligaciones — Realizado
 
 Existe la entidad `deudas` y el modelo `Deuda`.
 
 La obligación conserva sus fechas, importes, saldo externo, responsables, estado y origen del registro.
 
-### 5.5 Registrar cada importación — Realizado
+### 5.6 Registrar cada importación — Realizado
 
 Existe `importacion_carteras` y cada proceso registra:
 
@@ -174,13 +180,15 @@ El historial se muestra en un modal con archivo, estado, filas, nuevas, actualiz
 
 Cada importación se compara con el último corte completado de la misma empresa.
 
-Una obligación puede quedar como:
+Una obligación puede quedar en el historial de corte como:
 
 - `presente`;
-- `ausente`;
+- `cancelada_por_mandante`;
 - `reingresada`.
 
-Una ausencia no significa pago, cierre ni eliminación. La obligación conserva su historial porque la empresa mandante puede haber gestionado el cobro por su propio canal.
+Cuando una obligación deja de aparecer, se considera cancelada por la empresa mandante. No se elimina ni se modifica su saldo histórico, pero deja de estar disponible en la cartera operativa para nuevas asignaciones o gestiones. Si reaparece en un DOC_MADRE posterior, vuelve a `vigente` y se registra como `reingresada`.
+
+La pantalla de cartera muestra por defecto las obligaciones vigentes y permite consultar por separado las obligaciones saldadas por la empresa mandante.
 
 ## 6. Procesos operativos pendientes
 
@@ -300,6 +308,8 @@ La consolidación de cartera está funcional:
 - simulación sin persistencia;
 - auditoría de cambios externos;
 - comparación de cortes con ausencias y reingresos;
+- cancelación operativa de obligaciones que dejan de aparecer en el DOC_MADRE;
+- reactivación automática cuando una obligación cancelada vuelve a aparecer;
 - filtros e historial;
 - barra de progreso de carga;
 - permisos y pruebas automatizadas.

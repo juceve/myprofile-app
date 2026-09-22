@@ -33,6 +33,7 @@ class ImportarCarteraTest extends TestCase
         $this->assertDatabaseCount('deudas', 2);
         $this->assertDatabaseHas('clientes', ['codigo_externo' => '1001', 'nombre' => 'Cliente de prueba']);
         $this->assertDatabaseHas('deudas', ['numero_documento' => '204469', 'saldo_actual' => 7529.99]);
+        $this->assertDatabaseHas('jefe_ventas', ['nombre' => 'Jefe de ventas']);
         $this->assertDatabaseHas('importacion_carteras', ['deudas_creadas' => 2, 'deudas_actualizadas' => 0]);
     }
 
@@ -67,9 +68,10 @@ class ImportarCarteraTest extends TestCase
         $segundoCorte = ImportacionCartera::where('nombre_archivo', 'corte-2.xlsx')->firstOrFail();
         $this->assertSame(1, $segundoCorte->deudas_ausentes);
         $this->assertSame(0, $segundoCorte->deudas_reingresadas);
+        $this->assertDatabaseHas('deudas', ['numero_documento' => '204470', 'estado_operativo' => 'cancelada_por_mandante']);
         $this->assertDatabaseHas('presencia_deuda_cortes', [
             'importacion_cartera_id' => $segundoCorte->id,
-            'estado' => 'ausente',
+            'estado' => 'cancelada_por_mandante',
         ]);
 
         $this->artisan('cartera:importar', ['archivo' => $this->crearArchivoCartera([
@@ -80,6 +82,7 @@ class ImportarCarteraTest extends TestCase
         $tercerCorte = ImportacionCartera::where('nombre_archivo', 'corte-3.xlsx')->firstOrFail();
         $this->assertSame(0, $tercerCorte->deudas_ausentes);
         $this->assertSame(1, $tercerCorte->deudas_reingresadas);
+        $this->assertDatabaseHas('deudas', ['numero_documento' => '204470', 'estado_operativo' => 'vigente']);
         $this->assertSame('reingresada', PresenciaDeudaCorte::where('importacion_cartera_id', $tercerCorte->id)->where('estado', 'reingresada')->value('estado'));
     }
 

@@ -40,6 +40,12 @@ return [
                 'icon' => 'building',
                 'can' => 'empresas.view',
             ],
+            [
+                'name' => 'Jefes de venta',
+                'route' => 'jefes-venta.index',
+                'icon' => 'user-tie',
+                'can' => 'empresas.view',
+            ],
         ],
     ],
 ];

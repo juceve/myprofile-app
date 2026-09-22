@@ -30,6 +30,17 @@ body { font-family: var(--font-sans); }
     will-change: transform, opacity;
 }
 
+@keyframes import-progress-indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+}
+
+.progress-indeterminate {
+    position: relative;
+    width: 35% !important;
+    animation: import-progress-indeterminate 1.15s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .toast-enter {
         animation-duration: 1ms;

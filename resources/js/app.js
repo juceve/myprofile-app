@@ -234,6 +234,7 @@ document.querySelectorAll('[data-progress-form]').forEach((form) => {
         const progressBar = form.querySelector('[data-import-progress-bar]');
         const progressValue = form.querySelector('[data-import-progress-value]');
         const progressMessage = form.querySelector('[data-import-progress-message]');
+        const progressSpinner = form.querySelector('[data-import-spinner]');
         const submitButton = form.querySelector('[data-import-submit]');
         const archivo = form.querySelector('input[type="file"]');
 
@@ -245,6 +246,9 @@ document.querySelectorAll('[data-progress-form]').forEach((form) => {
 
         form.dataset.submitting = 'true';
         progress.classList.remove('hidden');
+        progress.setAttribute('aria-busy', 'true');
+        progressBar.classList.remove('animate-pulse');
+        progressBar.classList.remove('w-full');
         submitButton.disabled = true;
         submitButton.classList.add('cursor-not-allowed', 'opacity-60');
         progressMessage.textContent = 'Cargando archivo...';
@@ -265,7 +269,13 @@ document.querySelectorAll('[data-progress-form]').forEach((form) => {
                 actualizarProgreso(Math.round((progressEvent.loaded / progressEvent.total) * 100));
             }
         });
-        solicitud.upload.addEventListener('load', () => actualizarProgreso(100, 'Archivo cargado. Procesando cartera...'));
+        solicitud.upload.addEventListener('load', () => {
+            actualizarProgreso(100, 'Archivo recibido. Procesando cartera...');
+            progressSpinner?.classList.remove('hidden');
+            progressBar.classList.add('progress-indeterminate');
+            progressValue.textContent = 'Procesando';
+            progressBar.setAttribute('aria-valuetext', 'Procesando cartera');
+        });
         solicitud.addEventListener('load', () => {
             if (solicitud.status >= 200 && solicitud.status < 400) {
                 window.location.assign(solicitud.responseURL || form.action);
@@ -274,12 +284,18 @@ document.querySelectorAll('[data-progress-form]').forEach((form) => {
             }
 
             form.dataset.submitting = 'false';
+            progress.setAttribute('aria-busy', 'false');
+            progressSpinner?.classList.add('hidden');
+            progressBar.classList.remove('progress-indeterminate');
             submitButton.disabled = false;
             submitButton.classList.remove('cursor-not-allowed', 'opacity-60');
             progressMessage.textContent = 'No fue posible cargar el archivo. Revise los datos e intente nuevamente.';
         });
         solicitud.addEventListener('error', () => {
             form.dataset.submitting = 'false';
+            progress.setAttribute('aria-busy', 'false');
+            progressSpinner?.classList.add('hidden');
+            progressBar.classList.remove('progress-indeterminate');
             submitButton.disabled = false;
             submitButton.classList.remove('cursor-not-allowed', 'opacity-60');
             progressMessage.textContent = 'Se perdió la conexión durante la carga.';

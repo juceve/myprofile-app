@@ -15,7 +15,7 @@ class EmpresaMandanteController extends Controller
     {
         return view('empresas-mandantes.index', [
             'empresasMandantes' => EmpresaMandante::query()
-                ->withCount(['clientes', 'importacionesCartera'])
+                ->withCount(['clientes', 'importacionesCartera', 'jefesVenta'])
                 ->orderBy('razon_social')
                 ->get(),
         ]);

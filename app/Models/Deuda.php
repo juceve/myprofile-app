@@ -17,7 +17,7 @@ class Deuda extends Model
     protected $fillable = [
         'cliente_id', 'numero_documento', 'fecha_documento', 'fecha_vencimiento',
         'importe_original', 'saldo_actual', 'plazo_dias', 'fecha_ultimo_pago',
-        'estado_origen', 'jefe_vendedor_nombre', 'supervisor_nombre', 'vendedor_nombre',
+        'estado_origen', 'estado_operativo', 'jefe_vendedor_nombre', 'supervisor_nombre', 'vendedor_nombre',
         'fecha_carga', 'origen_archivo', 'origen_fila', 'importacion_cartera_id',
     ];
 

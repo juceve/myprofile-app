@@ -100,6 +100,25 @@ class CarteraTest extends TestCase
             ->assertSee('BBO');
     }
 
+    public function test_puede_consultar_deudas_saldadas_por_la_empresa_mandante(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $user = User::factory()->create();
+        $user->givePermissionTo('cartera.view');
+        $empresaMandante = EmpresaMandante::factory()->create(['codigo' => 'BBO']);
+        $cliente = Cliente::factory()->create(['empresa_mandante_id' => $empresaMandante->id, 'nombre' => 'Cliente saldado']);
+        Deuda::factory()->for($cliente)->create([
+            'numero_documento' => 'DOC-SALDADO',
+            'estado_operativo' => 'cancelada_por_mandante',
+        ]);
+
+        $this->actingAs($user)->withSession(['empresa_mandante_id' => $empresaMandante->id])
+            ->get('/cartera?situacion=cancelada_por_mandante')
+            ->assertOk()
+            ->assertSee('Cliente saldado')
+            ->assertSee('DOC-SALDADO');
+    }
+
     public function test_importa_el_mismo_codigo_de_cliente_de_forma_aislada_por_empresa(): void
     {
         $empresaBbo = EmpresaMandante::factory()->create(['codigo' => 'BBO']);
